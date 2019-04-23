@@ -3,14 +3,15 @@ const winston = require('winston')
 const zeromq = require('zeromq')
 const uuid = require('uuid/v4')
 const msgpack = require('msgpack')
+const WebSocketServer = require('ws').Server
 const http = require('http')
 
 const
-RPCException = function (message, code) {
-    this.code = code || 0
-    this.message = message
-    this.toString = () => this.message
-}
+    RPCException = function (message, code) {
+        this.code = code || 0
+        this.message = message
+        this.toString = () => this.message
+    }
 pass = Symbol('pass')
 send = Symbol('send')
 
@@ -45,7 +46,6 @@ class RPC {
 
     [pass](data, clientId = '') {
         let request
-
         try {
             request = msgpack.unpack(data)
             this.logger.debug(`0MQ [${data}] <= ${request.id}` || 'N/A')
@@ -120,7 +120,7 @@ class RPC {
                 if (cb) {
                     result = Reflect.apply(cb, this, [
                         request.params,
-                        clientId ?this.isWsId(clientId)?clientId:clientId.toString('base64') : null
+                        clientId ? this.isWsId(clientId) ? clientId : clientId.toString('base64') : null
                     ])
                 }
                 else {
@@ -131,7 +131,7 @@ class RPC {
                     result = Reflect.apply(this._callingDefault, this, [
                         request.method,
                         request.params,
-                        clientId ?this.isWsId(clientId)?clientId: clientId.toString('base64') : null
+                        clientId ? this.isWsId(clientId) ? clientId : clientId.toString('base64') : null
                     ])
                 }
             } catch (e) {
@@ -215,12 +215,12 @@ class RPC {
     [send](data, clientId) {
         let response = msgpack.pack(data)
         if (clientId) {
-            const isWsId=this.isWsId(clientId)
-            this.logger.debug(`0MQ [${data.id}] => ${isWsId?clientId:clientId.toString('base64')}: ${JSON.stringify(data)}`)
-            if(isWsId){
+            const isWsId = this.isWsId(clientId)
+            this.logger.debug(`0MQ [${data.id}] => ${isWsId ? clientId : clientId.toString('base64')}: ${JSON.stringify(data)}`)
+            if (isWsId) {
                 const client = this.wsClients.get(clientId)
                 client && client.send(response)
-            }else{
+            } else {
                 this.socket.send([clientId, response])
             }
         }
@@ -242,27 +242,25 @@ class RPC {
         return this
     }
 
-    uuid() {
-        return "websocket-" + new Date().getTime() + Math.ceil(Math.random() * 1000) + Math.ceil(Math.random() * 1000)
-    }
-    isWsId(clientId){
+
+    isWsId(clientId) {
         return clientId.startsWith("websocket")
     }
 
     // Handle new WebSocket client
     onClientConnect(client) {
-        client.clientId = this.uuid()
+        client.clientId = "websocket-" + uuid()
         client.isAlive = true
-        client.on('message', function (data) {
+        client.on('message', (data) => {
             client.isAlive = true
             this[pass](data, client.clientId)
         })
-        client.on('close', function (code, reason) {
+        client.on('close', (code, reason) => {
             this.wsClients.delete(client.clientId)
         })
-        client.on('error', function () {
+        client.on('error', () => {
         })
-        client.on('pong', function () {
+        client.on('pong', () => {
             client.isAlive = true
         })
         this.wsClients.set(client.clientId, client)
@@ -277,7 +275,7 @@ class RPC {
             this.wsServer = new WebSocketServer({
                 server: this.webServer
             })
-            this.wsServer.on('connection', this.onClientConnect)
+            this.wsServer.on('connection', this.onClientConnect.bind(this))
         })
         this.interval && clearInterval(this.interval)
         this.interval = setInterval(() => {
@@ -289,9 +287,10 @@ class RPC {
                     } catch (e) {
                     }
                     continue
+                }else{
+                    client.isAlive = false
+                    client.ping('heartbeat')
                 }
-                client.isAlive = false
-                client.ping('heartbeat')
             }
         }, 30000)
         return this
