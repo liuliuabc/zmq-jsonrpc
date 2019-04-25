@@ -273,7 +273,9 @@ class RPC {
         })
         this.webServer.listen(port, () => {
             this.wsServer = new WebSocketServer({
-                server: this.webServer
+                server: this.webServer, verifyClient: (info,cb) => {
+                    cb(true);//允许所有连接
+                }
             })
             this.wsServer.on('connection', this.onClientConnect.bind(this))
         })
@@ -287,7 +289,7 @@ class RPC {
                     } catch (e) {
                     }
                     continue
-                }else{
+                } else {
                     client.isAlive = false
                     client.ping('heartbeat')
                 }
