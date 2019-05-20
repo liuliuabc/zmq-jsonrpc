@@ -23,7 +23,7 @@ server.calling('foo', function(params, clientId){
     return "bar";
 });
 server.bind(path);
-server.bindWs(port);//允许通过websocket连接，port为ws绑定端口
+server.bindWs(port);//bind websocket
 // CLIENT SIDE
 
 var client = zRPC.connect(path);
